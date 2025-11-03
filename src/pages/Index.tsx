@@ -5,10 +5,7 @@ import ImageCanvas from "@/components/ImageCanvas";
 import DetectionResults from "@/components/DetectionResults";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import {
-  detectContraband,
-  type Detection,
-} from "@/services/detectionService";
+import { detectContraband, type Detection } from "@/services/detectionService";
 import ProhibitedItemsShowcase, {
   type ExampleSelection,
 } from "@/components/ProhibitedItemsShowcase";
@@ -35,38 +32,41 @@ const Index = () => {
     setHasScanned(false);
   }, []);
 
-  const handleDetect = useCallback(async (fileToScan: File) => {
-    setIsScanning(true);
-    setHasScanned(false);
+  const handleDetect = useCallback(
+    async (fileToScan: File) => {
+      setIsScanning(true);
+      setHasScanned(false);
 
-    try {
-      const results = await detectContraband(fileToScan);
-      setDetections(results);
-      setHasScanned(true);
+      try {
+        const results = await detectContraband(fileToScan);
+        setDetections(results);
+        setHasScanned(true);
 
-      if (results.length === 0) {
+        if (results.length === 0) {
+          toast({
+            title: "Scan Complete",
+            description: "No prohibited items detected",
+          });
+        } else {
+          toast({
+            title: "Threats Detected",
+            description: `Found ${results.length} potential threat(s)`,
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.error("Detection error:", error);
         toast({
-          title: "Scan Complete",
-          description: "No prohibited items detected",
-        });
-      } else {
-        toast({
-          title: "Threats Detected",
-          description: `Found ${results.length} potential threat(s)`,
+          title: "Scan Failed",
+          description: "Error processing image. Please try again.",
           variant: "destructive",
         });
+      } finally {
+        setIsScanning(false);
       }
-    } catch (error) {
-      console.error("Detection error:", error);
-      toast({
-        title: "Scan Failed",
-        description: "Error processing image. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsScanning(false);
-    }
-  }, [toast]);
+    },
+    [toast]
+  );
 
   const handleExampleSelect = useCallback(
     async ({ url, name, slug }: ExampleSelection) => {
@@ -100,7 +100,8 @@ const Index = () => {
         const dataUrl = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result as string);
-          reader.onerror = () => reject(new Error("Failed to read example file"));
+          reader.onerror = () =>
+            reject(new Error("Failed to read example file"));
           reader.readAsDataURL(file);
         });
 
@@ -160,17 +161,6 @@ const Index = () => {
           {/* Right Column - Output */}
           <div className="space-y-6">
             <div className="bg-card rounded-lg border border-border p-6 h-[340px] sm:h-[400px] lg:h-[440px] relative">
-              {imageUrl && (
-                <Button
-                  onClick={handleClear}
-                  variant="destructive"
-                  size="sm"
-                  className="absolute right-4 top-4 z-10"
-                >
-                  Clear
-                </Button>
-              )}
-
               {imageUrl ? (
                 <div className="h-full w-full overflow-hidden rounded-md bg-muted/30 p-2">
                   <ImageCanvas imageUrl={imageUrl} detections={detections} />
@@ -178,13 +168,19 @@ const Index = () => {
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
                   <Scan className="h-8 w-8 text-primary" />
-                  <p>Upload an X-ray image on the left to view annotated detections here.</p>
+                  <p>
+                    Upload an X-ray image on the left to view annotated
+                    detections here.
+                  </p>
                 </div>
               )}
             </div>
 
             {(hasScanned || isScanning) && (
-              <DetectionResults detections={detections} isScanning={isScanning} />
+              <DetectionResults
+                detections={detections}
+                isScanning={isScanning}
+              />
             )}
           </div>
         </div>
