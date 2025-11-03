@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ImageOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,12 @@ interface ProhibitedItem {
   name: string;
   description: string;
   slug: string;
+}
+
+export interface ExampleSelection {
+  slug: string;
+  name: string;
+  url: string;
 }
 
 const PROHIBITED_ITEMS: ProhibitedItem[] = [
@@ -88,11 +94,17 @@ const PROHIBITED_ITEMS: ProhibitedItem[] = [
   },
 ];
 
-const EXTENSIONS = ["jpg", "png", "jpeg", "webp"];
+const EXTENSIONS = ["png", "jpg", "jpeg", "webp"];
 
-const ExampleItemCard = ({ item }: { item: ProhibitedItem }) => {
+interface ExampleItemCardProps {
+  item: ProhibitedItem;
+  onSelect?: (selection: ExampleSelection) => void;
+}
+
+const ExampleItemCard = ({ item, onSelect }: ExampleItemCardProps) => {
   const [imageIndex, setImageIndex] = useState(0);
   const [hasError, setHasError] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   const imageSrc = useMemo(
     () => `/example-images/${item.slug}.${EXTENSIONS[imageIndex]}`,
@@ -107,8 +119,44 @@ const ExampleItemCard = ({ item }: { item: ProhibitedItem }) => {
     }
   };
 
+  const handleImageLoad = () => {
+    setHasLoaded(true);
+  };
+
+  useEffect(() => {
+    setHasLoaded(false);
+  }, [imageSrc]);
+
+  const handleSelect = () => {
+    if (!onSelect || hasError || !hasLoaded) return;
+    onSelect({
+      slug: item.slug,
+      name: item.name,
+      url: imageSrc,
+    });
+  };
+
+  const canSelect = Boolean(onSelect) && !hasError && hasLoaded;
+
   return (
-    <div className="rounded-md border border-border/60 bg-card/70 shadow-sm">
+    <div
+      className={`rounded-md border border-border/60 bg-card/70 shadow-sm transition-all ${
+        canSelect
+          ? "cursor-pointer hover:border-primary/50 hover:shadow-md focus-visible:border-primary focus-visible:shadow-lg"
+          : "cursor-default opacity-90"
+      }`}
+      role={canSelect ? "button" : undefined}
+      tabIndex={canSelect ? 0 : -1}
+      onClick={handleSelect}
+      onKeyDown={(event) => {
+        if (!canSelect) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          handleSelect();
+        }
+      }}
+      aria-disabled={!canSelect}
+    >
       <div className="relative flex aspect-[4/3] items-center justify-center bg-muted/60">
         {!hasError ? (
           <img
@@ -117,6 +165,7 @@ const ExampleItemCard = ({ item }: { item: ProhibitedItem }) => {
             className="h-full w-full object-contain p-2"
             loading="lazy"
             onError={handleImageError}
+            onLoad={handleImageLoad}
           />
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 px-3 text-xs text-muted-foreground">
@@ -135,7 +184,13 @@ const ExampleItemCard = ({ item }: { item: ProhibitedItem }) => {
   );
 };
 
-const ProhibitedItemsShowcase = () => {
+interface ProhibitedItemsShowcaseProps {
+  onExampleSelect?: (selection: ExampleSelection) => void;
+}
+
+const ProhibitedItemsShowcase = ({
+  onExampleSelect,
+}: ProhibitedItemsShowcaseProps) => {
   return (
     <Card className="bg-gradient-surface border-border">
       <CardHeader className="pb-2">
@@ -150,7 +205,11 @@ const ProhibitedItemsShowcase = () => {
       <CardContent className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
           {PROHIBITED_ITEMS.map((item) => (
-            <ExampleItemCard key={item.id} item={item} />
+            <ExampleItemCard
+              key={item.id}
+              item={item}
+              onSelect={onExampleSelect}
+            />
           ))}
         </div>
       </CardContent>

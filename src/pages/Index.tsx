@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Shield, Scan } from "lucide-react";
 import ImageUpload from "@/components/ImageUpload";
 import ImageCanvas from "@/components/ImageCanvas";
@@ -9,7 +9,9 @@ import {
   detectContraband,
   type Detection,
 } from "@/services/detectionService";
-import ProhibitedItemsShowcase from "@/components/ProhibitedItemsShowcase";
+import ProhibitedItemsShowcase, {
+  type ExampleSelection,
+} from "@/components/ProhibitedItemsShowcase";
 
 const Index = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -19,21 +21,21 @@ const Index = () => {
   const [hasScanned, setHasScanned] = useState(false);
   const { toast } = useToast();
 
-  const handleImageSelect = (file: File, dataUrl: string) => {
+  const handleImageSelect = useCallback((file: File, dataUrl: string) => {
     setSelectedFile(file);
     setImageUrl(dataUrl);
     setDetections([]);
     setHasScanned(false);
-  };
+  }, []);
 
-  const handleClear = () => {
+  const handleClear = useCallback(() => {
     setSelectedFile(null);
     setImageUrl(null);
     setDetections([]);
     setHasScanned(false);
-  };
+  }, []);
 
-  const handleDetect = async (fileToScan: File) => {
+  const handleDetect = useCallback(async (fileToScan: File) => {
     setIsScanning(true);
     setHasScanned(false);
 
@@ -64,13 +66,63 @@ const Index = () => {
     } finally {
       setIsScanning(false);
     }
-  };
+  }, [toast]);
+
+  const handleExampleSelect = useCallback(
+    async ({ url, name, slug }: ExampleSelection) => {
+      try {
+        setIsScanning(true);
+        setHasScanned(false);
+
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Failed to load example image: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const inferredExtension =
+          blob.type?.split("/")[1] ??
+          url.split(".").pop()?.split("?")[0] ??
+          "png";
+
+        const baseName =
+          slug ||
+          name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "") ||
+          "example-image";
+
+        const file = new File([blob], `${baseName}.${inferredExtension}`, {
+          type: blob.type || `image/${inferredExtension}`,
+        });
+
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Failed to read example file"));
+          reader.readAsDataURL(file);
+        });
+
+        handleImageSelect(file, dataUrl);
+      } catch (error) {
+        console.error("Example selection error:", error);
+        toast({
+          title: "Unable to load example",
+          description: "Please try another example image.",
+          variant: "destructive",
+        });
+        setIsScanning(false);
+      }
+    },
+    [handleImageSelect, toast]
+  );
 
   useEffect(() => {
     if (selectedFile) {
       void handleDetect(selectedFile);
     }
-  }, [selectedFile]);
+  }, [selectedFile, handleDetect]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -138,7 +190,7 @@ const Index = () => {
         </div>
 
         <div className="mt-8">
-          <ProhibitedItemsShowcase />
+          <ProhibitedItemsShowcase onExampleSelect={handleExampleSelect} />
         </div>
       </main>
     </div>
