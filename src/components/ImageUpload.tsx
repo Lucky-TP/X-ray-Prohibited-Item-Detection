@@ -1,5 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { Upload, X } from "lucide-react";
+import { useDropzone, type FileRejection } from "react-dropzone";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
@@ -9,130 +10,167 @@ interface ImageUploadProps {
   onClear: () => void;
 }
 
+const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+const ACCEPTED_TYPES = {
+  "image/png": [],
+  "image/jpeg": [],
+};
+
 const ImageUpload = ({ onImageSelect, selectedImage, onClear }: ImageUploadProps) => {
-  const [isDragging, setIsDragging] = useState(false);
   const { toast } = useToast();
-
-  const validateFile = (file: File): boolean => {
-    const validTypes = ["image/png", "image/jpeg", "image/jpg"];
-    const maxSize = 5 * 1024 * 1024; // 5MB
-
-    if (!validTypes.includes(file.type)) {
-      toast({
-        title: "Invalid file type",
-        description: "Please upload a PNG or JPEG image",
-        variant: "destructive",
-      });
-      return false;
-    }
-
-    if (file.size > maxSize) {
-      toast({
-        title: "File too large",
-        description: "Maximum file size is 5MB",
-        variant: "destructive",
-      });
-      return false;
-    }
-
-    return true;
-  };
 
   const handleFile = useCallback(
     (file: File) => {
-      if (!validateFile(file)) return;
-
       const reader = new FileReader();
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result as string;
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
         onImageSelect(file, dataUrl);
       };
       reader.readAsDataURL(file);
     },
-    [onImageSelect, toast]
+    [onImageSelect]
   );
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-
-      const file = e.dataTransfer.files[0];
-      if (file) handleFile(file);
+  const handleDropAccepted = useCallback(
+    (files: File[]) => {
+      const [file] = files;
+      if (file) {
+        handleFile(file);
+      }
     },
     [handleFile]
   );
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
+  const handleDropRejected = useCallback(
+    (rejections: FileRejection[]) => {
+      const rejection = rejections[0];
+      const error = rejection?.errors[0];
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
+      if (!error) return;
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleFile(file);
-  };
+      let description = error.message;
 
-  if (selectedImage) {
-    return (
-      <div className="relative">
-        <Button
-          onClick={onClear}
-          variant="destructive"
-          size="sm"
-          className="absolute top-2 right-2 z-10"
-        >
-          <X className="h-4 w-4 mr-1" />
-          Clear
-        </Button>
-      </div>
-    );
-  }
+      if (error.code === "file-too-large") {
+        description = "Maximum file size is 5MB.";
+      } else if (error.code === "file-invalid-type") {
+        description = "Please upload a PNG or JPEG image.";
+      }
+
+      toast({
+        title: "Upload error",
+        description,
+        variant: "destructive",
+      });
+    },
+    [toast]
+  );
+
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
+    accept: ACCEPTED_TYPES,
+    maxSize: MAX_SIZE_BYTES,
+    multiple: false,
+    noClick: true,
+    noKeyboard: true,
+    onDropAccepted: handleDropAccepted,
+    onDropRejected: handleDropRejected,
+  });
+
+  const triggerFileDialog = useCallback(() => {
+    open();
+  }, [open]);
+
+  const dropZoneClasses = `
+    relative border-2 border-dashed rounded-xl transition-all ease-in-out cursor-pointer
+    flex flex-col items-center justify-center text-center overflow-hidden
+    h-[340px] sm:h-[400px] lg:h-[440px] w-full
+    ${isDragActive ? "border-primary bg-primary/10 scale-[1.01]" : "border-border hover:border-primary/60"}
+  `;
 
   return (
     <div
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      className={`
-        relative border-2 border-dashed rounded-lg p-12 text-center transition-all
-        ${isDragging ? "border-primary bg-primary/10 scale-[1.02]" : "border-border hover:border-primary/50"}
-      `}
+      {...getRootProps({
+        className: dropZoneClasses,
+        role: "button",
+        tabIndex: 0,
+        onClick: (event) => {
+          event.preventDefault();
+          triggerFileDialog();
+        },
+        onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            triggerFileDialog();
+          }
+        },
+      })}
     >
-      <input
-        type="file"
-        id="file-upload"
-        className="hidden"
-        accept="image/png,image/jpeg,image/jpg"
-        onChange={handleFileInput}
-      />
-      
-      <div className="flex flex-col items-center gap-4">
-        <div className={`p-6 rounded-full bg-card transition-all ${isDragging ? "shadow-glow-primary" : ""}`}>
-          <Upload className="h-12 w-12 text-primary" />
-        </div>
-        
-        <div className="space-y-2">
-          <h3 className="text-xl font-semibold">Upload X-Ray Image</h3>
-          <p className="text-sm text-muted-foreground max-w-sm">
-            Drag and drop your luggage X-ray image here, or click to browse
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Supports PNG, JPG, JPEG (max 5MB)
-          </p>
-        </div>
+      <input {...getInputProps()} />
 
-        <label htmlFor="file-upload">
-          <Button variant="default" asChild className="cursor-pointer">
-            <span>Browse Files</span>
+      {!selectedImage ? (
+        <div className="flex flex-col items-center gap-5 px-6 py-10">
+          <div
+            className={`p-6 rounded-full bg-card transition-all ${isDragActive ? "shadow-glow-primary" : ""}`}
+          >
+            <Upload className="h-12 w-12 text-primary" />
+          </div>
+
+          <div className="space-y-3 max-w-lg">
+            <h3 className="text-2xl font-semibold">Upload X-Ray Image</h3>
+            <p className="text-sm text-muted-foreground">
+              Drag and drop your luggage scan or click below to browse from your device.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Supports PNG, JPG, JPEG formats up to 5MB.
+            </p>
+          </div>
+
+          <Button
+            variant="default"
+            onClick={(event) => {
+              event.stopPropagation();
+              triggerFileDialog();
+            }}
+          >
+            Browse Files
           </Button>
-        </label>
-      </div>
+        </div>
+      ) : (
+        <>
+          <div className="absolute top-4 right-4 flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(event) => {
+                event.stopPropagation();
+                triggerFileDialog();
+              }}
+            >
+              Replace Image
+            </Button>
+            <Button
+              onClick={(event) => {
+                event.stopPropagation();
+                onClear();
+              }}
+              variant="destructive"
+              size="sm"
+            >
+              <X className="h-4 w-4 mr-1" />
+              Clear
+            </Button>
+          </div>
+
+          <div className="w-full h-full px-4 pb-6 pt-12 sm:px-8 sm:pt-16">
+            <div className="mx-auto max-w-4xl h-full rounded-lg bg-muted/40 p-4 sm:p-6 md:p-8">
+              <img
+                src={selectedImage}
+                alt="Selected X-ray preview"
+                className="h-full w-full object-contain"
+              />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

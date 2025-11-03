@@ -1,16 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Shield, Scan } from "lucide-react";
 import ImageUpload from "@/components/ImageUpload";
 import ImageCanvas from "@/components/ImageCanvas";
 import DetectionResults from "@/components/DetectionResults";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-
-interface Detection {
-  label: string;
-  confidence: number;
-  box: [number, number, number, number];
-}
+import { Button } from "@/components/ui/button";
+import {
+  detectContraband,
+  type Detection,
+} from "@/services/detectionService";
+import ProhibitedItemsShowcase from "@/components/ProhibitedItemsShowcase";
 
 const Index = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -34,34 +33,19 @@ const Index = () => {
     setHasScanned(false);
   };
 
-  const handleDetect = async () => {
-    if (!selectedFile) return;
-
+  const handleDetect = async (fileToScan: File) => {
     setIsScanning(true);
     setHasScanned(false);
 
     try {
-      const formData = new FormData();
-      formData.append("image", selectedFile);
-
-      // Replace with your actual API endpoint
-      const response = await fetch("/api/detect", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-
-      const results: Detection[] = await response.json();
+      const results = await detectContraband(fileToScan);
       setDetections(results);
       setHasScanned(true);
 
       if (results.length === 0) {
         toast({
           title: "Scan Complete",
-          description: "No contraband items detected",
+          description: "No prohibited items detected",
         });
       } else {
         toast({
@@ -82,6 +66,12 @@ const Index = () => {
     }
   };
 
+  useEffect(() => {
+    if (selectedFile) {
+      void handleDetect(selectedFile);
+    }
+  }, [selectedFile]);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -92,9 +82,11 @@ const Index = () => {
               <Shield className="h-8 w-8 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Airport Security Scanner</h1>
+              <h1 className="text-2xl font-bold sm:text-3xl">
+                X-ray Prohibited Item Detection
+              </h1>
               <p className="text-sm text-muted-foreground">
-                AI-Powered Contraband Detection System
+                AI-powered screening for restricted items and security threats.
               </p>
             </div>
           </div>
@@ -103,84 +95,50 @@ const Index = () => {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Left Column - Upload and Controls */}
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Left Column - Input */}
+          <div className="space-y-6">
             <ImageUpload
               onImageSelect={handleImageSelect}
               selectedImage={imageUrl}
               onClear={handleClear}
             />
-
-            {imageUrl && (
-              <div className="space-y-4">
-                <div className="bg-card rounded-lg border border-border p-6">
-                  <ImageCanvas imageUrl={imageUrl} detections={detections} />
-                </div>
-
-                <div className="flex gap-3">
-                  <Button
-                    onClick={handleDetect}
-                    disabled={isScanning}
-                    size="lg"
-                    className="flex-1"
-                  >
-                    <Scan className="h-5 w-5 mr-2" />
-                    {isScanning ? "Scanning..." : "Detect Items"}
-                  </Button>
-                  <Button
-                    onClick={handleClear}
-                    variant="outline"
-                    size="lg"
-                  >
-                    Clear
-                  </Button>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Right Column - Results */}
+          {/* Right Column - Output */}
           <div className="space-y-6">
+            <div className="bg-card rounded-lg border border-border p-6 h-[340px] sm:h-[400px] lg:h-[440px] relative">
+              {imageUrl && (
+                <Button
+                  onClick={handleClear}
+                  variant="destructive"
+                  size="sm"
+                  className="absolute right-4 top-4 z-10"
+                >
+                  Clear
+                </Button>
+              )}
+
+              {imageUrl ? (
+                <div className="h-full w-full overflow-hidden rounded-md bg-muted/30 p-2">
+                  <ImageCanvas imageUrl={imageUrl} detections={detections} />
+                </div>
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
+                  <Scan className="h-8 w-8 text-primary" />
+                  <p>Upload an X-ray image on the left to view annotated detections here.</p>
+                </div>
+              )}
+            </div>
+
             {(hasScanned || isScanning) && (
               <DetectionResults detections={detections} isScanning={isScanning} />
             )}
-
-            {!imageUrl && (
-              <div className="bg-card rounded-lg border border-border p-6">
-                <h3 className="font-semibold mb-4 flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-primary" />
-                  Instructions
-                </h3>
-                <ol className="space-y-3 text-sm text-muted-foreground">
-                  <li className="flex gap-3">
-                    <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary font-semibold">
-                      1
-                    </span>
-                    <span>Upload an X-ray image of luggage using the upload area</span>
-                  </li>
-                  <li className="flex gap-3">
-                    <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary font-semibold">
-                      2
-                    </span>
-                    <span>Click "Detect Items" to scan for contraband</span>
-                  </li>
-                  <li className="flex gap-3">
-                    <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary font-semibold">
-                      3
-                    </span>
-                    <span>Review detected items with confidence scores</span>
-                  </li>
-                  <li className="flex gap-3">
-                    <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary font-semibold">
-                      4
-                    </span>
-                    <span>Use "Clear" to scan a new image</span>
-                  </li>
-                </ol>
-              </div>
-            )}
           </div>
+        </div>
+
+        <div className="mt-8">
+          <ProhibitedItemsShowcase />
         </div>
       </main>
     </div>
