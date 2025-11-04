@@ -44,19 +44,6 @@ const Index = () => {
         const results = await detectContraband(fileToScan, threshold);
         setDetections(results);
         setHasScanned(true);
-
-        if (results.length === 0) {
-          toast({
-            title: "Scan Complete",
-            description: "No prohibited items detected",
-          });
-        } else {
-          toast({
-            title: "Threats Detected",
-            description: `Found ${results.length} potential threat(s)`,
-            variant: "destructive",
-          });
-        }
       } catch (error) {
         console.error("Detection error:", error);
         toast({
