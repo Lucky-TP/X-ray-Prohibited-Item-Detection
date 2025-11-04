@@ -148,6 +148,8 @@ const Index = () => {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
+        <ProhibitedItemsShowcase onExampleSelect={handleExampleSelect} />
+
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Left Column - Input */}
           <div className="space-y-6">
@@ -183,10 +185,6 @@ const Index = () => {
               />
             )}
           </div>
-        </div>
-
-        <div className="mt-8">
-          <ProhibitedItemsShowcase onExampleSelect={handleExampleSelect} />
         </div>
       </main>
     </div>

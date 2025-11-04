@@ -1,7 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ImageOff } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  ImageOff,
+} from "lucide-react";
+import useEmblaCarousel from "embla-carousel-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 interface ProhibitedItem {
   id: number;
@@ -111,6 +118,10 @@ const ExampleItemCard = ({ item, onSelect }: ExampleItemCardProps) => {
     [item.slug, imageIndex]
   );
 
+  useEffect(() => {
+    setHasLoaded(false);
+  }, [imageSrc]);
+
   const handleImageError = () => {
     if (imageIndex < EXTENSIONS.length - 1) {
       setImageIndex((index) => index + 1);
@@ -122,10 +133,6 @@ const ExampleItemCard = ({ item, onSelect }: ExampleItemCardProps) => {
   const handleImageLoad = () => {
     setHasLoaded(true);
   };
-
-  useEffect(() => {
-    setHasLoaded(false);
-  }, [imageSrc]);
 
   const handleSelect = () => {
     if (!onSelect || hasError || !hasLoaded) return;
@@ -139,23 +146,15 @@ const ExampleItemCard = ({ item, onSelect }: ExampleItemCardProps) => {
   const canSelect = Boolean(onSelect) && !hasError && hasLoaded;
 
   return (
-    <div
-      className={`rounded-md border border-border/60 bg-card/70 shadow-sm transition-all ${
-        canSelect
-          ? "cursor-pointer hover:border-primary/50 hover:shadow-md focus-visible:border-primary focus-visible:shadow-lg"
-          : "cursor-default opacity-90"
-      }`}
-      role={canSelect ? "button" : undefined}
-      tabIndex={canSelect ? 0 : -1}
+    <button
+      type="button"
       onClick={handleSelect}
-      onKeyDown={(event) => {
-        if (!canSelect) return;
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          handleSelect();
-        }
-      }}
-      aria-disabled={!canSelect}
+      disabled={!canSelect}
+      className={`group w-full rounded-md border border-border/60 bg-card/70 text-left shadow-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 ${
+        canSelect
+          ? "cursor-pointer hover:border-primary/50 hover:shadow-md"
+          : "cursor-not-allowed opacity-70"
+      }`}
     >
       <div className="relative flex aspect-[4/3] items-center justify-center bg-muted/60">
         {!hasError ? (
@@ -180,7 +179,7 @@ const ExampleItemCard = ({ item, onSelect }: ExampleItemCardProps) => {
           {item.description}
         </p>
       </div>
-    </div>
+    </button>
   );
 };
 
@@ -191,6 +190,41 @@ interface ProhibitedItemsShowcaseProps {
 const ProhibitedItemsShowcase = ({
   onExampleSelect,
 }: ProhibitedItemsShowcaseProps) => {
+  const [emblaRef, emblaApi] = useEmblaCarousel({
+    align: "start",
+    containScroll: "trimSnaps",
+    slidesToScroll: 1,
+    dragFree: true,
+  });
+  const [canScrollPrev, setCanScrollPrev] = useState(false);
+  const [canScrollNext, setCanScrollNext] = useState(false);
+
+  const updateScrollButtons = useCallback(() => {
+    if (!emblaApi) return;
+    setCanScrollPrev(emblaApi.canScrollPrev());
+    setCanScrollNext(emblaApi.canScrollNext());
+  }, [emblaApi]);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    updateScrollButtons();
+    emblaApi.on("select", updateScrollButtons);
+    emblaApi.on("reInit", updateScrollButtons);
+
+    return () => {
+      emblaApi.off("select", updateScrollButtons);
+      emblaApi.off("reInit", updateScrollButtons);
+    };
+  }, [emblaApi, updateScrollButtons]);
+
+  const scrollPrev = useCallback(() => {
+    emblaApi?.scrollPrev();
+  }, [emblaApi]);
+
+  const scrollNext = useCallback(() => {
+    emblaApi?.scrollNext();
+  }, [emblaApi]);
+
   return (
     <Card className="bg-gradient-surface border-border">
       <CardHeader className="pb-2">
@@ -199,18 +233,69 @@ const ProhibitedItemsShowcase = ({
             <AlertTriangle className="h-5 w-5 text-destructive" />
             Prohibited Item Examples
           </span>
-          <Badge variant="outline">{PROHIBITED_ITEMS.length} items</Badge>
+          <div className="flex items-center gap-3">
+            <Badge variant="outline">{PROHIBITED_ITEMS.length} items</Badge>
+            <div className="hidden sm:flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={scrollPrev}
+                disabled={!canScrollPrev}
+                aria-label="Previous examples"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={scrollNext}
+                disabled={!canScrollNext}
+                aria-label="Next examples"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
-          {PROHIBITED_ITEMS.map((item) => (
-            <ExampleItemCard
-              key={item.id}
-              item={item}
-              onSelect={onExampleSelect}
-            />
-          ))}
+        <div className="relative">
+          <div className="overflow-hidden" ref={emblaRef}>
+            <div className="flex gap-3">
+              {PROHIBITED_ITEMS.map((item) => (
+                <div
+                  key={item.id}
+                  className="min-w-[220px] max-w-[260px] flex-shrink-0"
+                >
+                  <ExampleItemCard item={item} onSelect={onExampleSelect} />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-background via-background/80 to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-background via-background/80 to-transparent" />
+        </div>
+        <div className="flex justify-center gap-2 sm:hidden pt-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={scrollPrev}
+            disabled={!canScrollPrev}
+            aria-label="Previous examples"
+          >
+            <ChevronLeft className="mr-1 h-4 w-4" />
+            Prev
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={scrollNext}
+            disabled={!canScrollNext}
+            aria-label="Next examples"
+          >
+            Next
+            <ChevronRight className="ml-1 h-4 w-4" />
+          </Button>
         </div>
       </CardContent>
     </Card>
